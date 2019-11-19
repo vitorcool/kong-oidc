@@ -1,6 +1,13 @@
 local cjson = require("cjson")
+local resty_openidc = require("resty.openidc")
 
 local M = {}
+
+local function get_OpenId_configuration(config)
+  local res,err = resty_openidc.get_discovery_doc(config)
+  -- todo handle err
+  return res or {}
+end
 
 local function parseFilters(csvFilters)
   local filters = {}
@@ -39,6 +46,16 @@ function M.get_redirect_uri_path(ngx)
   return tackle_slash(drop_query())
 end
 
+function M.get_redirect_after_logout_uri(config)
+  local _oidcConfig = get_OpenId_configuration(config)
+  local ret = _oidcConfig.end_session_endpoint
+  if config.redirect_after_logout_uri then 
+    local after_logout_uri = ngx.var.scheme.."://"..ngx.var.host..config.redirect_after_logout_uri
+    ret = ret.."?"..ngx.encode_args({redirect_uri=after_logout_uri})
+  end  
+  return ret
+end
+
 function M.get_options(config, ngx)
   return {
     client_id = config.client_id,
@@ -57,7 +74,7 @@ function M.get_options(config, ngx)
     recovery_page_path = config.recovery_page_path,
     filters = parseFilters(config.filters),
     logout_path = config.logout_path,
-    redirect_after_logout_uri = config.redirect_after_logout_uri,
+    redirect_after_logout_uri = M.get_redirect_after_logout_uri(config), 
   }
 end
 
